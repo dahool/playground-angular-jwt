@@ -1,6 +1,9 @@
 var express = require('express');
 var bodyParser = require('body-parser');
 var jwt = require("jsonwebtoken");
+var cookieParser = require('cookie-parser');
+
+const uuidv1 = require('uuid/v1');
 
 const KEY = '12345678';
 
@@ -8,10 +11,11 @@ var app = express();
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({extended: false}));
+app.use(cookieParser());
 
 // Add headers
 app.use(function (req, res, next) {
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Origin', 'http://localhost:8080');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
     res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
     res.setHeader('Access-Control-Allow-Credentials', true);
@@ -29,17 +33,26 @@ var user = {id: 1,
 }
 
 router.post('/users/authenticate', function(req, res) {
-    console.log(req);
-    var token = jwt.sign(user, KEY);
+    console.log(req.headers);
+    let options = {
+        maxAge: 1000 * 60 * 15, // would expire after 15 minutes
+        httpOnly: true, // The cookie only accessible by the web server
+    }
+    let val = uuidv1();
+    res.cookie('SESSIONID', val, options);
+    var token = jwt.sign(user, KEY + val);
     console.log(token);
     user.token = token;
     res.json(user);
 });
 
 router.get('/users', function(req, res) {
-    console.log(req);
-    var token = req.header('authorization')
-    jwt.verify(token, KEY, function (err, decoded) {
+    console.log(req.headers);
+    console.log(req.cookies);
+    var sess = req.cookies['SESSIONID'];
+    var token = req.header('authorization').substring(7);
+    console.log(token);
+    jwt.verify(token, KEY + sess, function (err, decoded) {
         if (err) {
             console.log("ERROR");
             res.status(401)
@@ -53,8 +66,9 @@ router.get('/users', function(req, res) {
 });
 
 router.post('/token', function(req, res) {
-    console.log(req);
-    var token = req.header('authorization')
+    console.log(req.headers);
+    console.log(req.cookies);
+    var token = req.header('authorization').substring(7);
     jwt.verify(token, KEY, function (err, decoded) {
         if (err) {
             console.log("ERROR");
@@ -70,22 +84,6 @@ router.post('/token', function(req, res) {
     });
 });
 
-/*
-router.route('/save')
-    .put(function(req, res) {
-        if (!req.body) return res.sendStatus(400);
-        h = heroes.find(hero => hero.id === req.body.id);
-        h.name = req.body.name;
-        res.json(h);
-    })
-    .post(function(req, res) {
-        if (!req.body) return res.sendStatus(400);
-        h = heroes[heroes.length-1]
-        x = {id: ++h.id, name: req.body.name}
-        heroes.push(x)
-        res.json(x);
-    })
-*/
 app.use('/', router);
 
 app.listen(3000, "0.0.0.0", () => console.log('Started'));
